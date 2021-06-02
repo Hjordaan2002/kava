@@ -30,7 +30,7 @@ func NewCommunityPoolMultiSpendProposalHandler(k Keeper) govtypes.Handler {
 			if ctx.BlockTime().After(v0142UpgradeTime) {
 				return keeper.HandleCommunityPoolMultiSpendProposal(ctx, k, c)
 			}
-			return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "unrecognized kavadist proposal content type: %T", c)
+			return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "unrecognized gov proposal type: %s", c.ProposalType())
 		default:
 			return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "unrecognized kavadist proposal content type: %T", c)
 		}
