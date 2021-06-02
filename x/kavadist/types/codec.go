@@ -14,13 +14,12 @@ func init() {
 	cdc := codec.New()
 	RegisterCodec(cdc)
 	codec.RegisterCrypto(cdc)
-	RegisterMultiSpend(cdc)
 	ModuleCdc = cdc
 }
 
 // RegisterCodec registers the necessary types for cdp module
 func RegisterCodec(cdc *codec.Codec) {
-
+	RegisterMultiSpend(cdc)
 }
 
 func RegisterMultiSpend(cdc *codec.Codec) {
