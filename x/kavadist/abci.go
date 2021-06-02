@@ -13,9 +13,7 @@ func BeginBlocker(ctx sdk.Context, k Keeper) {
 	if err != nil {
 		panic(err)
 	}
-	updated := false
-	if ctx.BlockTime().After(v0142UpgradeTime) && !updated {
+	if ctx.BlockTime().After(v0142UpgradeTime) {
 		RegisterMultiSpend(ModuleCdc)
-		updated = true
 	}
 }
