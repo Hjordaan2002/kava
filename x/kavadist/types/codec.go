@@ -2,7 +2,6 @@ package types
 
 import (
 	"bytes"
-	"fmt"
 	"strings"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -15,6 +14,7 @@ func init() {
 	cdc := codec.New()
 	RegisterCodec(cdc)
 	codec.RegisterCrypto(cdc)
+	RegisterMultiSpend(cdc)
 	ModuleCdc = cdc
 }
 
@@ -26,7 +26,6 @@ func RegisterCodec(cdc *codec.Codec) {
 func RegisterMultiSpend(cdc *codec.Codec) {
 	buf := new(bytes.Buffer)
 	cdc.PrintTypes(buf)
-	fmt.Printf("%s\n", buf.String())
 	if strings.Contains(buf.String(), "kava/CommunityPoolMultiSpendProposal") {
 		return
 	}
