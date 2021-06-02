@@ -9,10 +9,13 @@ func init() {
 	cdc := codec.New()
 	RegisterCodec(cdc)
 	codec.RegisterCrypto(cdc)
-	ModuleCdc = cdc.Seal()
 }
 
 // RegisterCodec registers the necessary types for cdp module
 func RegisterCodec(cdc *codec.Codec) {
+
+}
+
+func RegisterMultiSpend(cdc *codec.Codec) {
 	cdc.RegisterConcrete(CommunityPoolMultiSpendProposal{}, "kava/CommunityPoolMultiSpendProposal", nil)
 }

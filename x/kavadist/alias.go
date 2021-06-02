@@ -31,6 +31,7 @@ const (
 var (
 	// functions aliases
 	RegisterCodec                         = types.RegisterCodec
+	RegisterMultiSpend                    = types.RegisterMultiSpend
 	NewGenesisState                       = types.NewGenesisState
 	DefaultGenesisState                   = types.DefaultGenesisState
 	NewPeriod                             = types.NewPeriod
