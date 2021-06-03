@@ -1,16 +1,12 @@
 package incentive
 
 import (
-	"time"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
 	"github.com/kava-labs/kava/x/incentive/keeper"
 	"github.com/kava-labs/kava/x/incentive/types"
 )
-
-var v0142UpgradeTime = time.Date(2021, 6, 10, 14, 0, 0, 0, time.UTC)
 
 // NewHandler creates an sdk.Handler for incentive module messages
 func NewHandler(k keeper.Keeper) sdk.Handler {
@@ -20,17 +16,11 @@ func NewHandler(k keeper.Keeper) sdk.Handler {
 		case types.MsgClaimUSDXMintingReward:
 			return handleMsgClaimUSDXMintingReward(ctx, k, msg)
 		case types.MsgClaimUSDXMintingRewardVVesting:
-			if ctx.BlockTime().After(v0142UpgradeTime) {
-				return handleMsgClaimUSDXMintingRewardVVesting(ctx, k, msg)
-			}
-			return nil, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "unrecognized %s message type: %T", ModuleName, msg)
+			return handleMsgClaimUSDXMintingRewardVVesting(ctx, k, msg)
 		case types.MsgClaimHardReward:
 			return handleMsgClaimHardReward(ctx, k, msg)
 		case types.MsgClaimHardRewardVVesting:
-			if ctx.BlockTime().After(v0142UpgradeTime) {
-				return handleMsgClaimHardRewardVVesting(ctx, k, msg)
-			}
-			return nil, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "unrecognized %s message type: %T", ModuleName, msg)
+			return handleMsgClaimHardRewardVVesting(ctx, k, msg)
 		default:
 			return nil, sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "unrecognized %s message type: %T", ModuleName, msg)
 		}
