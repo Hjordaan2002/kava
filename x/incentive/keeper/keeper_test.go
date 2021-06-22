@@ -168,6 +168,23 @@ func (suite *KeeperTestSuite) TestIterateUSDXMintingAccrualTimes_NotEmpty() {
 	suite.Equal(expectedAccrualTimes, actualAccrualTimes)
 }
 
+func (suite *KeeperTestSuite) TestIterateUSDXMintingRewardFactors_NotEmpty() {
+	suite.SetupApp()
+
+	expectedRewardIndexes := nonEmptyRewardIndexes
+	for _, rf := range expectedRewardIndexes {
+		suite.keeper.SetUSDXMintingRewardFactor(suite.ctx, rf.CollateralType, rf.RewardFactor)
+	}
+
+	var actualRewardIndexes types.RewardIndexes
+	suite.keeper.IterateUSDXMintingRewardFactors(suite.ctx, func(denom string, factor sdk.Dec) bool {
+		actualRewardIndexes = append(actualRewardIndexes, types.NewRewardIndex(denom, factor))
+		return false
+	})
+
+	suite.Equal(expectedRewardIndexes, actualRewardIndexes)
+}
+
 func (suite *KeeperTestSuite) TestIterateHardDelegatorRewardAccrualTimes_NotEmpty() {
 	suite.SetupApp()
 
@@ -184,6 +201,23 @@ func (suite *KeeperTestSuite) TestIterateHardDelegatorRewardAccrualTimes_NotEmpt
 	})
 
 	suite.Equal(expectedAccrualTimes, actualAccrualTimes)
+}
+
+func (suite *KeeperTestSuite) TestIterateHardDelegatorRewardFactors_NotEmpty() {
+	suite.SetupApp()
+
+	expectedRewardIndexes := nonEmptyRewardIndexes
+	for _, rf := range expectedRewardIndexes {
+		suite.keeper.SetHardDelegatorRewardFactor(suite.ctx, rf.CollateralType, rf.RewardFactor)
+	}
+
+	var actualRewardIndexes types.RewardIndexes
+	suite.keeper.IterateHardDelegatorRewardFactors(suite.ctx, func(denom string, factor sdk.Dec) bool {
+		actualRewardIndexes = append(actualRewardIndexes, types.NewRewardIndex(denom, factor))
+		return false
+	})
+
+	suite.Equal(expectedRewardIndexes, actualRewardIndexes)
 }
 
 func (suite *KeeperTestSuite) TestIterateHardSupplyRewardAccrualTimes_NotEmpty() {
@@ -204,6 +238,21 @@ func (suite *KeeperTestSuite) TestIterateHardSupplyRewardAccrualTimes_NotEmpty()
 	suite.Equal(expectedAccrualTimes, actualAccrualTimes)
 }
 
+func (suite *KeeperTestSuite) TestIterateHardSupplyRewardFactors_NotEmpty() {
+	expectedRewardIndexes := nonEmptyMultiRewardIndexes
+	for _, rf := range expectedRewardIndexes {
+		suite.keeper.SetHardSupplyRewardIndexes(suite.ctx, rf.CollateralType, rf.RewardIndexes)
+	}
+
+	var actualRewardIndexes types.MultiRewardIndexes
+	suite.keeper.IterateHardSupplyRewardIndexes(suite.ctx, func(denom string, indexes types.RewardIndexes) bool {
+		actualRewardIndexes = append(actualRewardIndexes, types.NewMultiRewardIndex(denom, indexes))
+		return false
+	})
+
+	suite.Equal(expectedRewardIndexes, actualRewardIndexes)
+}
+
 func (suite *KeeperTestSuite) TestIterateHardBorrowrRewardAccrualTimes_NotEmpty() {
 	suite.SetupApp()
 
@@ -222,27 +271,22 @@ func (suite *KeeperTestSuite) TestIterateHardBorrowrRewardAccrualTimes_NotEmpty(
 	suite.Equal(expectedAccrualTimes, actualAccrualTimes)
 }
 
-// func createPeriodicVestingAccount(origVesting sdk.Coins, periods vesting.Periods, startTime, endTime int64) (*vesting.PeriodicVestingAccount, error) {
-// 	_, addr := app.GeneratePrivKeyAddressPairs(1)
-// 	bacc := auth.NewBaseAccountWithAddress(addr[0])
-// 	bacc.Coins = origVesting
-// 	bva, err := vesting.NewBaseVestingAccount(&bacc, origVesting, endTime)
-// 	if err != nil {
-// 		return &vesting.PeriodicVestingAccount{}, err
-// 	}
-// 	pva := vesting.NewPeriodicVestingAccountRaw(bva, startTime, periods)
-// 	err = pva.Validate()
-// 	if err != nil {
-// 		return &vesting.PeriodicVestingAccount{}, err
-// 	}
-// 	return pva, nil
-// }
+func (suite *KeeperTestSuite) TestIterateHardBorrowRewardFactors_NotEmpty() {
+	suite.SetupApp()
 
-// // Avoid cluttering test cases with long function names
-// func i(in int64) sdk.Int                    { return sdk.NewInt(in) }
-// func d(str string) sdk.Dec                  { return sdk.MustNewDecFromStr(str) }
-// func c(denom string, amount int64) sdk.Coin { return sdk.NewInt64Coin(denom, amount) }
-// func cs(coins ...sdk.Coin) sdk.Coins        { return sdk.NewCoins(coins...) }
+	expectedRewardIndexes := nonEmptyMultiRewardIndexes
+	for _, rf := range expectedRewardIndexes {
+		suite.keeper.SetHardBorrowRewardIndexes(suite.ctx, rf.CollateralType, rf.RewardIndexes)
+	}
+
+	var actualRewardIndexes types.MultiRewardIndexes
+	suite.keeper.IterateHardBorrowRewardIndexes(suite.ctx, func(denom string, indexes types.RewardIndexes) bool {
+		actualRewardIndexes = append(actualRewardIndexes, types.NewMultiRewardIndex(denom, indexes))
+		return false
+	})
+
+	suite.Equal(expectedRewardIndexes, actualRewardIndexes)
+}
 
 func TestKeeperTestSuite(t *testing.T) {
 	suite.Run(t, new(KeeperTestSuite))
