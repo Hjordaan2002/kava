@@ -118,10 +118,8 @@ func (k Keeper) IterateUSDXMintingAccrualTimes(ctx sdk.Context, cb func(string, 
 	defer iterator.Close()
 	for ; iterator.Valid(); iterator.Next() {
 		var accrualTime time.Time
-		var collateralType string
-		k.cdc.MustUnmarshalBinaryBare(iterator.Value(), &collateralType)
 		k.cdc.MustUnmarshalBinaryBare(iterator.Value(), &accrualTime)
-		if cb(collateralType, accrualTime) {
+		if cb(string(iterator.Key()), accrualTime) {
 			break
 		}
 	}
