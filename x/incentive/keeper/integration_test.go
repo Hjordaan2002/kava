@@ -249,6 +249,9 @@ func (builder IncentiveGenesisBuilder) WithInitializedBorrowRewardPeriod(period 
 
 	accumulationTimeForPeriod := types.NewGenesisAccumulationTime(period.CollateralType, builder.genesisTime)
 	builder.HardBorrowAccumulationTimes = append(builder.HardBorrowAccumulationTimes, accumulationTimeForPeriod)
+
+	indexesForPeriod := types.NewGenesisRewardIndexes(period.CollateralType, initialRewardIndexesFromRewardPerSecond(period.RewardsPerSecond...))
+	builder.HardBorrowRewardIndexes = append(builder.HardBorrowRewardIndexes, indexesForPeriod)
 	return builder
 }
 
@@ -266,6 +269,9 @@ func (builder IncentiveGenesisBuilder) WithInitializedSupplyRewardPeriod(period 
 
 	accumulationTimeForPeriod := types.NewGenesisAccumulationTime(period.CollateralType, builder.genesisTime)
 	builder.HardSupplyAccumulationTimes = append(builder.HardSupplyAccumulationTimes, accumulationTimeForPeriod)
+
+	indexesForPeriod := types.NewGenesisRewardIndexes(period.CollateralType, initialRewardIndexesFromRewardPerSecond(period.RewardsPerSecond...))
+	builder.HardSupplyRewardIndexes = append(builder.HardSupplyRewardIndexes, indexesForPeriod)
 	return builder
 }
 
@@ -283,6 +289,9 @@ func (builder IncentiveGenesisBuilder) WithInitializedDelegatorRewardPeriod(peri
 
 	accumulationTimeForPeriod := types.NewGenesisAccumulationTime(period.CollateralType, builder.genesisTime)
 	builder.HardDelegatorAccumulationTimes = append(builder.HardDelegatorAccumulationTimes, accumulationTimeForPeriod)
+
+	indexesForPeriod := types.NewGenesisRewardIndexes(period.CollateralType, initialRewardIndexesFromRewardPerSecond(period.RewardsPerSecond))
+	builder.HardDelegatorRewardIndexes = append(builder.HardDelegatorRewardIndexes, indexesForPeriod)
 	return builder
 }
 
@@ -300,6 +309,9 @@ func (builder IncentiveGenesisBuilder) WithInitializedUSDXRewardPeriod(period ty
 
 	accumulationTimeForPeriod := types.NewGenesisAccumulationTime(period.CollateralType, builder.genesisTime)
 	builder.USDXAccumulationTimes = append(builder.USDXAccumulationTimes, accumulationTimeForPeriod)
+
+	indexesForPeriod := types.NewGenesisRewardIndexes(period.CollateralType, initialRewardIndexesFromRewardPerSecond(period.RewardsPerSecond))
+	builder.USDXRewardIndexes = append(builder.USDXRewardIndexes, indexesForPeriod)
 	return builder
 }
 
@@ -316,6 +328,14 @@ func (builder IncentiveGenesisBuilder) WithSimpleUSDXRewardPeriod(ctype string, 
 func (builder IncentiveGenesisBuilder) WithMultipliers(multipliers types.Multipliers) IncentiveGenesisBuilder {
 	builder.Params.ClaimMultipliers = multipliers
 	return builder
+}
+
+func initialRewardIndexesFromRewardPerSecond(rewardsPerSecond ...sdk.Coin) types.RewardIndexes {
+	indexes := make(types.RewardIndexes, len(rewardsPerSecond))
+	for i, coin := range rewardsPerSecond {
+		indexes[i] = types.NewRewardIndex(coin.Denom, sdk.ZeroDec())
+	}
+	return indexes
 }
 
 // HardGenesisBuilder is a tool for creating a hard genesis state.
