@@ -21,32 +21,52 @@ func TestGenesisState_Validate(t *testing.T) {
 		sdk.AccAddress(crypto.AddressHash([]byte("KavaTest4"))),
 		sdk.AccAddress(crypto.AddressHash([]byte("KavaTest5"))),
 	}
+
 	testGenesis := GenesisState{
 		NextProposalID: 2,
-		Committees: []Committee{
-			{
-				ID:               1,
-				Description:      "This committee is for testing.",
-				Members:          addresses[:3],
-				Permissions:      []Permission{GodPermission{}},
-				VoteThreshold:    d("0.667"),
-				ProposalDuration: time.Hour * 24 * 7,
+		Committees: Committees{
+			MemberCommittee{
+				BaseCommittee: BaseCommittee{
+					ID:               1,
+					Description:      "This members committee is for testing.",
+					Members:          addresses[:3],
+					Permissions:      []Permission{GodPermission{}},
+					VoteThreshold:    d("0.667"),
+					ProposalDuration: time.Hour * 24 * 7,
+					TallyOption:      FirstPastThePost,
+				},
 			},
-			{
-				ID:               2,
-				Description:      "This committee is also for testing.",
-				Members:          addresses[2:],
-				Permissions:      nil,
-				VoteThreshold:    d("0.8"),
-				ProposalDuration: time.Hour * 24 * 21,
+			MemberCommittee{
+				BaseCommittee: BaseCommittee{
+					ID:               2,
+					Description:      "This members committee is also for testing.",
+					Members:          addresses[:3],
+					Permissions:      nil,
+					VoteThreshold:    d("0.8"),
+					ProposalDuration: time.Hour * 24 * 21,
+					TallyOption:      FirstPastThePost,
+				},
+			},
+			TokenCommittee{
+				BaseCommittee: BaseCommittee{
+					ID:               3,
+					Description:      "This token committee is for testing.",
+					Members:          addresses[:3],
+					Permissions:      nil,
+					VoteThreshold:    d("0.8"),
+					ProposalDuration: time.Hour * 24 * 21,
+					TallyOption:      Deadline,
+				},
+				Quorum:     sdk.MustNewDecFromStr("0.4"),
+				TallyDenom: "hard",
 			},
 		},
 		Proposals: []Proposal{
 			{ID: 1, CommitteeID: 1, PubProposal: govtypes.NewTextProposal("A Title", "A description of this proposal."), Deadline: testTime.Add(7 * 24 * time.Hour)},
 		},
 		Votes: []Vote{
-			{ProposalID: 1, Voter: addresses[0]},
-			{ProposalID: 1, Voter: addresses[1]},
+			{ProposalID: 1, Voter: addresses[0], VoteType: Yes},
+			{ProposalID: 1, Voter: addresses[1], VoteType: Yes},
 		},
 	}
 
@@ -79,7 +99,7 @@ func TestGenesisState_Validate(t *testing.T) {
 			name: "invalid committee",
 			genState: GenesisState{
 				NextProposalID: testGenesis.NextProposalID,
-				Committees:     append(testGenesis.Committees, Committee{}),
+				Committees:     append(testGenesis.Committees, MemberCommittee{}),
 				Proposals:      testGenesis.Proposals,
 				Votes:          testGenesis.Votes,
 			},

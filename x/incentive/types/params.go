@@ -7,6 +7,7 @@ import (
 	"time"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/params"
 
 	tmtime "github.com/tendermint/tendermint/types/time"
@@ -24,52 +25,59 @@ const (
 
 // Parameter keys and default values
 var (
-	KeyUSDXMintingRewardPeriods     = []byte("USDXMintingRewardPeriods")
-	KeyHardSupplyRewardPeriods      = []byte("HardSupplyRewardPeriods")
-	KeyHardBorrowRewardPeriods      = []byte("HardBorrowRewardPeriods")
-	KeyHardDelegatorRewardPeriods   = []byte("HardDelegatorRewardPeriods")
-	KeyClaimEnd                     = []byte("ClaimEnd")
-	KeyMultipliers                  = []byte("ClaimMultipliers")
-	DefaultActive                   = false
-	DefaultRewardPeriods            = RewardPeriods{}
-	DefaultMultiRewardPeriods       = MultiRewardPeriods{}
-	DefaultMultipliers              = Multipliers{}
-	DefaultUSDXClaims               = USDXMintingClaims{}
-	DefaultHardClaims               = HardLiquidityProviderClaims{}
-	DefaultGenesisAccumulationTimes = GenesisAccumulationTimes{}
-	DefaultClaimEnd                 = tmtime.Canonical(time.Unix(1, 0))
-	GovDenom                        = cdptypes.DefaultGovDenom
-	PrincipalDenom                  = "usdx"
-	IncentiveMacc                   = kavadistTypes.ModuleName
+	KeyUSDXMintingRewardPeriods = []byte("USDXMintingRewardPeriods")
+	KeyHardSupplyRewardPeriods  = []byte("HardSupplyRewardPeriods")
+	KeyHardBorrowRewardPeriods  = []byte("HardBorrowRewardPeriods")
+	KeyDelegatorRewardPeriods   = []byte("DelegatorRewardPeriods")
+	KeySwapRewardPeriods        = []byte("SwapRewardPeriods")
+	KeyClaimEnd                 = []byte("ClaimEnd")
+	KeyMultipliers              = []byte("ClaimMultipliers")
+	DefaultActive               = false
+	DefaultRewardPeriods        = RewardPeriods{}
+	DefaultMultiRewardPeriods   = MultiRewardPeriods{}
+	DefaultMultipliers          = Multipliers{}
+	DefaultClaimEnd             = tmtime.Canonical(time.Unix(1, 0))
+	GovDenom                    = cdptypes.DefaultGovDenom
+	PrincipalDenom              = "usdx"
+	IncentiveMacc               = kavadistTypes.ModuleName
 )
 
 // Params governance parameters for the incentive module
 type Params struct {
-	USDXMintingRewardPeriods   RewardPeriods      `json:"usdx_minting_reward_periods" yaml:"usdx_minting_reward_periods"`
-	HardSupplyRewardPeriods    MultiRewardPeriods `json:"hard_supply_reward_periods" yaml:"hard_supply_reward_periods"`
-	HardBorrowRewardPeriods    MultiRewardPeriods `json:"hard_borrow_reward_periods" yaml:"hard_borrow_reward_periods"`
-	HardDelegatorRewardPeriods RewardPeriods      `json:"hard_delegator_reward_periods" yaml:"hard_delegator_reward_periods"`
-	ClaimMultipliers           Multipliers        `json:"claim_multipliers" yaml:"claim_multipliers"`
-	ClaimEnd                   time.Time          `json:"claim_end" yaml:"claim_end"`
+	USDXMintingRewardPeriods RewardPeriods      `json:"usdx_minting_reward_periods" yaml:"usdx_minting_reward_periods"`
+	HardSupplyRewardPeriods  MultiRewardPeriods `json:"hard_supply_reward_periods" yaml:"hard_supply_reward_periods"`
+	HardBorrowRewardPeriods  MultiRewardPeriods `json:"hard_borrow_reward_periods" yaml:"hard_borrow_reward_periods"`
+	DelegatorRewardPeriods   MultiRewardPeriods `json:"delegator_reward_periods" yaml:"delegator_reward_periods"`
+	SwapRewardPeriods        MultiRewardPeriods `json:"swap_reward_periods" yaml:"swap_reward_periods"`
+	ClaimMultipliers         Multipliers        `json:"claim_multipliers" yaml:"claim_multipliers"`
+	ClaimEnd                 time.Time          `json:"claim_end" yaml:"claim_end"`
 }
 
 // NewParams returns a new params object
-func NewParams(usdxMinting RewardPeriods, hardSupply, hardBorrow MultiRewardPeriods,
-	hardDelegator RewardPeriods, multipliers Multipliers, claimEnd time.Time) Params {
+func NewParams(usdxMinting RewardPeriods, hardSupply, hardBorrow, delegator, swap MultiRewardPeriods,
+	multipliers Multipliers, claimEnd time.Time) Params {
 	return Params{
-		USDXMintingRewardPeriods:   usdxMinting,
-		HardSupplyRewardPeriods:    hardSupply,
-		HardBorrowRewardPeriods:    hardBorrow,
-		HardDelegatorRewardPeriods: hardDelegator,
-		ClaimMultipliers:           multipliers,
-		ClaimEnd:                   claimEnd,
+		USDXMintingRewardPeriods: usdxMinting,
+		HardSupplyRewardPeriods:  hardSupply,
+		HardBorrowRewardPeriods:  hardBorrow,
+		DelegatorRewardPeriods:   delegator,
+		SwapRewardPeriods:        swap,
+		ClaimMultipliers:         multipliers,
+		ClaimEnd:                 claimEnd,
 	}
 }
 
 // DefaultParams returns default params for incentive module
 func DefaultParams() Params {
-	return NewParams(DefaultRewardPeriods, DefaultMultiRewardPeriods,
-		DefaultMultiRewardPeriods, DefaultRewardPeriods, DefaultMultipliers, DefaultClaimEnd)
+	return NewParams(
+		DefaultRewardPeriods,
+		DefaultMultiRewardPeriods,
+		DefaultMultiRewardPeriods,
+		DefaultMultiRewardPeriods,
+		DefaultMultiRewardPeriods,
+		DefaultMultipliers,
+		DefaultClaimEnd,
+	)
 }
 
 // String implements fmt.Stringer
@@ -78,11 +86,12 @@ func (p Params) String() string {
 	USDX Minting Reward Periods: %s
 	Hard Supply Reward Periods: %s
 	Hard Borrow Reward Periods: %s
-	Hard Delegator Reward Periods: %s
+	Delegator Reward Periods: %s
+	Swap Reward Periods: %s
 	Claim Multipliers :%s
 	Claim End Time: %s
 	`, p.USDXMintingRewardPeriods, p.HardSupplyRewardPeriods, p.HardBorrowRewardPeriods,
-		p.HardDelegatorRewardPeriods, p.ClaimMultipliers, p.ClaimEnd)
+		p.DelegatorRewardPeriods, p.SwapRewardPeriods, p.ClaimMultipliers, p.ClaimEnd)
 }
 
 // ParamKeyTable Key declaration for parameters
@@ -96,7 +105,8 @@ func (p *Params) ParamSetPairs() params.ParamSetPairs {
 		params.NewParamSetPair(KeyUSDXMintingRewardPeriods, &p.USDXMintingRewardPeriods, validateRewardPeriodsParam),
 		params.NewParamSetPair(KeyHardSupplyRewardPeriods, &p.HardSupplyRewardPeriods, validateMultiRewardPeriodsParam),
 		params.NewParamSetPair(KeyHardBorrowRewardPeriods, &p.HardBorrowRewardPeriods, validateMultiRewardPeriodsParam),
-		params.NewParamSetPair(KeyHardDelegatorRewardPeriods, &p.HardDelegatorRewardPeriods, validateRewardPeriodsParam),
+		params.NewParamSetPair(KeyDelegatorRewardPeriods, &p.DelegatorRewardPeriods, validateMultiRewardPeriodsParam),
+		params.NewParamSetPair(KeySwapRewardPeriods, &p.SwapRewardPeriods, validateMultiRewardPeriodsParam),
 		params.NewParamSetPair(KeyClaimEnd, &p.ClaimEnd, validateClaimEndParam),
 		params.NewParamSetPair(KeyMultipliers, &p.ClaimMultipliers, validateMultipliersParam),
 	}
@@ -121,7 +131,15 @@ func (p Params) Validate() error {
 		return err
 	}
 
-	return validateRewardPeriodsParam(p.HardDelegatorRewardPeriods)
+	if err := validateMultiRewardPeriodsParam(p.DelegatorRewardPeriods); err != nil {
+		return err
+	}
+
+	if err := validateMultiRewardPeriodsParam(p.SwapRewardPeriods); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func validateRewardPeriodsParam(i interface{}) error {
@@ -233,6 +251,98 @@ func (rps RewardPeriods) Validate() error {
 	return nil
 }
 
+// MultiRewardPeriod supports multiple reward types
+type MultiRewardPeriod struct {
+	Active           bool      `json:"active" yaml:"active"`
+	CollateralType   string    `json:"collateral_type" yaml:"collateral_type"`
+	Start            time.Time `json:"start" yaml:"start"`
+	End              time.Time `json:"end" yaml:"end"`
+	RewardsPerSecond sdk.Coins `json:"rewards_per_second" yaml:"rewards_per_second"` // per second reward payouts
+}
+
+// String implements fmt.Stringer
+func (mrp MultiRewardPeriod) String() string {
+	return fmt.Sprintf(`Reward Period:
+	Collateral Type: %s,
+	Start: %s,
+	End: %s,
+	Rewards Per Second: %s,
+	Active %t,
+	`, mrp.CollateralType, mrp.Start, mrp.End, mrp.RewardsPerSecond, mrp.Active)
+}
+
+// NewMultiRewardPeriod returns a new MultiRewardPeriod
+func NewMultiRewardPeriod(active bool, collateralType string, start time.Time, end time.Time, reward sdk.Coins) MultiRewardPeriod {
+	return MultiRewardPeriod{
+		Active:           active,
+		CollateralType:   collateralType,
+		Start:            start,
+		End:              end,
+		RewardsPerSecond: reward,
+	}
+}
+
+// Validate performs a basic check of a MultiRewardPeriod.
+func (mrp MultiRewardPeriod) Validate() error {
+	if mrp.Start.IsZero() {
+		return errors.New("reward period start time cannot be 0")
+	}
+	if mrp.End.IsZero() {
+		return errors.New("reward period end time cannot be 0")
+	}
+	if mrp.Start.After(mrp.End) {
+		return fmt.Errorf("end period time %s cannot be before start time %s", mrp.End, mrp.Start)
+	}
+	if !mrp.RewardsPerSecond.IsValid() {
+		return fmt.Errorf("invalid reward amount: %s", mrp.RewardsPerSecond)
+	}
+	if strings.TrimSpace(mrp.CollateralType) == "" {
+		return fmt.Errorf("reward period collateral type cannot be blank: %s", mrp)
+	}
+	return nil
+}
+
+// MultiRewardPeriods array of MultiRewardPeriod
+type MultiRewardPeriods []MultiRewardPeriod
+
+// GetMultiRewardPeriod fetches a MultiRewardPeriod from an array of MultiRewardPeriods by its denom
+func (mrps MultiRewardPeriods) GetMultiRewardPeriod(denom string) (MultiRewardPeriod, bool) {
+	for _, rp := range mrps {
+		if rp.CollateralType == denom {
+			return rp, true
+		}
+	}
+	return MultiRewardPeriod{}, false
+}
+
+// GetMultiRewardPeriodIndex returns the index of a MultiRewardPeriod inside array MultiRewardPeriods
+func (mrps MultiRewardPeriods) GetMultiRewardPeriodIndex(denom string) (int, bool) {
+	for i, rp := range mrps {
+		if rp.CollateralType == denom {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+// Validate checks if all the RewardPeriods are valid and there are no duplicated
+// entries.
+func (mrps MultiRewardPeriods) Validate() error {
+	seenPeriods := make(map[string]bool)
+	for _, rp := range mrps {
+		if seenPeriods[rp.CollateralType] {
+			return fmt.Errorf("duplicated reward period with collateral type %s", rp.CollateralType)
+		}
+
+		if err := rp.Validate(); err != nil {
+			return err
+		}
+		seenPeriods[rp.CollateralType] = true
+	}
+
+	return nil
+}
+
 // Multiplier amount the claim rewards get increased by, along with how long the claim rewards are locked
 type Multiplier struct {
 	Name         MultiplierName `json:"name" yaml:"name"`
@@ -304,5 +414,5 @@ func (mn MultiplierName) IsValid() error {
 	case Small, Medium, Large:
 		return nil
 	}
-	return fmt.Errorf("invalid multiplier name: %s", mn)
+	return sdkerrors.Wrapf(ErrInvalidMultiplier, "invalid multiplier name: %s", mn)
 }

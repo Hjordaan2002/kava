@@ -19,4 +19,6 @@ var (
 	ErrClaimExpired                  = sdkerrors.Register(ModuleName, 10, "claim has expired")
 	ErrInvalidClaimType              = sdkerrors.Register(ModuleName, 11, "invalid claim type")
 	ErrInvalidClaimOwner             = sdkerrors.Register(ModuleName, 12, "invalid claim owner")
+	ErrDecreasingRewardFactor        = sdkerrors.Register(ModuleName, 13, "found new reward factor less than an old reward factor")
+	ErrInvalidClaimDenoms            = sdkerrors.Register(ModuleName, 14, "invalid claim denoms")
 )

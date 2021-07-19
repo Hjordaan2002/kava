@@ -2,22 +2,14 @@ package keeper_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
+	abci "github.com/tendermint/tendermint/abci/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/auth"
-	authexported "github.com/cosmos/cosmos-sdk/x/auth/exported"
-	"github.com/cosmos/cosmos-sdk/x/auth/vesting"
-	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
-	supplyexported "github.com/cosmos/cosmos-sdk/x/supply/exported"
-
-	abci "github.com/tendermint/tendermint/abci/types"
-	tmtime "github.com/tendermint/tendermint/types/time"
 
 	"github.com/kava-labs/kava/app"
-	committeekeeper "github.com/kava-labs/kava/x/committee/keeper"
-	hardkeeper "github.com/kava-labs/kava/x/hard/keeper"
 	"github.com/kava-labs/kava/x/incentive/keeper"
 	"github.com/kava-labs/kava/x/incentive/types"
 )
@@ -26,58 +18,35 @@ import (
 type KeeperTestSuite struct {
 	suite.Suite
 
-	keeper          keeper.Keeper
-	hardKeeper      hardkeeper.Keeper
-	stakingKeeper   stakingkeeper.Keeper
-	committeeKeeper committeekeeper.Keeper
-	app             app.TestApp
-	ctx             sdk.Context
-	addrs           []sdk.AccAddress
-	validatorAddrs  []sdk.ValAddress
+	keeper keeper.Keeper
+
+	app app.TestApp
+	ctx sdk.Context
+
+	genesisTime time.Time
+	addrs       []sdk.AccAddress
 }
 
-// The default state used by each test
+// SetupTest is run automatically before each suite test
 func (suite *KeeperTestSuite) SetupTest() {
 	config := sdk.GetConfig()
 	app.SetBech32AddressPrefixes(config)
 
-	_, allAddrs := app.GeneratePrivKeyAddressPairs(10)
-	suite.addrs = allAddrs[:5]
-	for _, a := range allAddrs[5:] {
-		suite.validatorAddrs = append(suite.validatorAddrs, sdk.ValAddress(a))
-	}
+	_, suite.addrs = app.GeneratePrivKeyAddressPairs(5)
 
-	tApp := app.NewTestApp()
-	ctx := tApp.NewContext(true, abci.Header{Height: 1, Time: tmtime.Now()})
-
-	tApp.InitializeFromGenesisStates()
-
-	suite.keeper = tApp.GetIncentiveKeeper()
-	suite.app = tApp
-	suite.ctx = ctx
+	suite.genesisTime = time.Date(2020, 12, 15, 14, 0, 0, 0, time.UTC)
 }
 
-// getAllAddrs returns all user and validator addresses in the suite
-func (suite *KeeperTestSuite) getAllAddrs() []sdk.AccAddress {
-	accAddrs := []sdk.AccAddress{} // initialize new slice to avoid accidental modifications to underlying
-	accAddrs = append(accAddrs, suite.addrs...)
-	for _, a := range suite.validatorAddrs {
-		accAddrs = append(accAddrs, sdk.AccAddress(a))
-	}
-	return accAddrs
-}
+func (suite *KeeperTestSuite) SetupApp() {
+	suite.app = app.NewTestApp()
 
-func (suite *KeeperTestSuite) getAccount(addr sdk.AccAddress) authexported.Account {
-	ak := suite.app.GetAccountKeeper()
-	return ak.GetAccount(suite.ctx, addr)
-}
+	suite.keeper = suite.app.GetIncentiveKeeper()
 
-func (suite *KeeperTestSuite) getModuleAccount(name string) supplyexported.ModuleAccountI {
-	sk := suite.app.GetSupplyKeeper()
-	return sk.GetModuleAccount(suite.ctx, name)
+	suite.ctx = suite.app.NewContext(true, abci.Header{Height: 1, Time: suite.genesisTime})
 }
 
 func (suite *KeeperTestSuite) TestGetSetDeleteUSDXMintingClaim() {
+	suite.SetupApp()
 	c := types.NewUSDXMintingClaim(suite.addrs[0], c("ukava", 1000000), types.RewardIndexes{types.NewRewardIndex("bnb-a", sdk.ZeroDec())})
 	_, found := suite.keeper.GetUSDXMintingClaim(suite.ctx, suite.addrs[0])
 	suite.Require().False(found)
@@ -95,6 +64,7 @@ func (suite *KeeperTestSuite) TestGetSetDeleteUSDXMintingClaim() {
 }
 
 func (suite *KeeperTestSuite) TestIterateUSDXMintingClaims() {
+	suite.SetupApp()
 	for i := 0; i < len(suite.addrs); i++ {
 		c := types.NewUSDXMintingClaim(suite.addrs[i], c("ukava", 100000), types.RewardIndexes{types.NewRewardIndex("bnb-a", sdk.ZeroDec())})
 		suite.Require().NotPanics(func() {
@@ -112,27 +82,304 @@ func (suite *KeeperTestSuite) TestIterateUSDXMintingClaims() {
 	suite.Require().Equal(len(suite.addrs), len(claims))
 }
 
-func createPeriodicVestingAccount(origVesting sdk.Coins, periods vesting.Periods, startTime, endTime int64) (*vesting.PeriodicVestingAccount, error) {
-	_, addr := app.GeneratePrivKeyAddressPairs(1)
-	bacc := auth.NewBaseAccountWithAddress(addr[0])
-	bacc.Coins = origVesting
-	bva, err := vesting.NewBaseVestingAccount(&bacc, origVesting, endTime)
-	if err != nil {
-		return &vesting.PeriodicVestingAccount{}, err
-	}
-	pva := vesting.NewPeriodicVestingAccountRaw(bva, startTime, periods)
-	err = pva.Validate()
-	if err != nil {
-		return &vesting.PeriodicVestingAccount{}, err
-	}
-	return pva, nil
+func (suite *KeeperTestSuite) TestGetSetDeleteSwapClaims() {
+	suite.SetupApp()
+	c := types.NewSwapClaim(suite.addrs[0], arbitraryCoins(), nonEmptyMultiRewardIndexes)
+
+	_, found := suite.keeper.GetSwapClaim(suite.ctx, suite.addrs[0])
+	suite.Require().False(found)
+
+	suite.Require().NotPanics(func() {
+		suite.keeper.SetSwapClaim(suite.ctx, c)
+	})
+	testC, found := suite.keeper.GetSwapClaim(suite.ctx, suite.addrs[0])
+	suite.Require().True(found)
+	suite.Require().Equal(c, testC)
+
+	suite.Require().NotPanics(func() {
+		suite.keeper.DeleteSwapClaim(suite.ctx, suite.addrs[0])
+	})
+	_, found = suite.keeper.GetSwapClaim(suite.ctx, suite.addrs[0])
+	suite.Require().False(found)
 }
 
-// Avoid cluttering test cases with long function names
-func i(in int64) sdk.Int                    { return sdk.NewInt(in) }
-func d(str string) sdk.Dec                  { return sdk.MustNewDecFromStr(str) }
-func c(denom string, amount int64) sdk.Coin { return sdk.NewInt64Coin(denom, amount) }
-func cs(coins ...sdk.Coin) sdk.Coins        { return sdk.NewCoins(coins...) }
+func (suite *KeeperTestSuite) TestIterateSwapClaims() {
+	suite.SetupApp()
+	claims := types.SwapClaims{
+		types.NewSwapClaim(suite.addrs[0], arbitraryCoins(), nonEmptyMultiRewardIndexes),
+		types.NewSwapClaim(suite.addrs[1], nil, nil), // different claim to the first
+	}
+	for _, claim := range claims {
+		suite.keeper.SetSwapClaim(suite.ctx, claim)
+	}
+
+	var actualClaims types.SwapClaims
+	suite.keeper.IterateSwapClaims(suite.ctx, func(c types.SwapClaim) bool {
+		actualClaims = append(actualClaims, c)
+		return false
+	})
+
+	suite.Require().Equal(claims, actualClaims)
+}
+
+func (suite *KeeperTestSuite) TestGetSetSwapRewardIndexes() {
+	testCases := []struct {
+		name     string
+		poolName string
+		indexes  types.RewardIndexes
+		panics   bool
+	}{
+		{
+			name:     "two factors can be written and read",
+			poolName: "btc/usdx",
+			indexes: types.RewardIndexes{
+				{
+					CollateralType: "hard",
+					RewardFactor:   d("0.02"),
+				},
+				{
+					CollateralType: "ukava",
+					RewardFactor:   d("0.04"),
+				},
+			},
+		},
+		{
+			name:     "indexes with empty pool name can be written and read",
+			poolName: "",
+			indexes: types.RewardIndexes{
+				{
+					CollateralType: "hard",
+					RewardFactor:   d("0.02"),
+				},
+				{
+					CollateralType: "ukava",
+					RewardFactor:   d("0.04"),
+				},
+			},
+		},
+		{
+			// this test is to detect any changes in behavior, it would be nice if Set didn't panic
+			name:     "setting empty indexes panics",
+			poolName: "btc/usdx",
+			indexes:  types.RewardIndexes{},
+			panics:   true,
+		},
+		{
+			// this test is to detect any changes in behavior, it would be nice if Set didn't panic
+			name:     "setting nil indexes panics",
+			poolName: "btc/usdx",
+			indexes:  nil,
+			panics:   true,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupApp()
+
+			_, found := suite.keeper.GetSwapRewardIndexes(suite.ctx, tc.poolName)
+			suite.False(found)
+
+			setFunc := func() { suite.keeper.SetSwapRewardIndexes(suite.ctx, tc.poolName, tc.indexes) }
+			if tc.panics {
+				suite.Panics(setFunc)
+				return
+			} else {
+				suite.NotPanics(setFunc)
+			}
+
+			storedIndexes, found := suite.keeper.GetSwapRewardIndexes(suite.ctx, tc.poolName)
+			suite.True(found)
+			suite.Equal(tc.indexes, storedIndexes)
+		})
+	}
+}
+
+func (suite *KeeperTestSuite) TestIterateSwapRewardIndexes() {
+	suite.SetupApp()
+	multiIndexes := types.MultiRewardIndexes{
+		{
+			CollateralType: "bnb/usdx",
+			RewardIndexes: types.RewardIndexes{
+				{
+					CollateralType: "swap",
+					RewardFactor:   d("0.0000002"),
+				},
+				{
+					CollateralType: "ukava",
+					RewardFactor:   d("0.04"),
+				},
+			},
+		},
+		{
+			CollateralType: "btcb/usdx",
+			RewardIndexes: types.RewardIndexes{
+				{
+					CollateralType: "hard",
+					RewardFactor:   d("0.02"),
+				},
+			},
+		},
+	}
+	for _, mi := range multiIndexes {
+		suite.keeper.SetSwapRewardIndexes(suite.ctx, mi.CollateralType, mi.RewardIndexes)
+	}
+
+	var actualMultiIndexes types.MultiRewardIndexes
+	suite.keeper.IterateSwapRewardIndexes(suite.ctx, func(poolID string, i types.RewardIndexes) bool {
+		actualMultiIndexes = actualMultiIndexes.With(poolID, i)
+		return false
+	})
+
+	suite.Require().Equal(multiIndexes, actualMultiIndexes)
+}
+
+func (suite *KeeperTestSuite) TestGetSetSwapRewardAccrualTimes() {
+	testCases := []struct {
+		name        string
+		poolName    string
+		accrualTime time.Time
+		panics      bool
+	}{
+		{
+			name:        "normal time can be written and read",
+			poolName:    "btc/usdx",
+			accrualTime: time.Date(1998, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			name:        "zero time can be written and read",
+			poolName:    "btc/usdx",
+			accrualTime: time.Time{},
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupApp()
+
+			_, found := suite.keeper.GetSwapRewardAccrualTime(suite.ctx, tc.poolName)
+			suite.False(found)
+
+			setFunc := func() { suite.keeper.SetSwapRewardAccrualTime(suite.ctx, tc.poolName, tc.accrualTime) }
+			if tc.panics {
+				suite.Panics(setFunc)
+				return
+			} else {
+				suite.NotPanics(setFunc)
+			}
+
+			storedTime, found := suite.keeper.GetSwapRewardAccrualTime(suite.ctx, tc.poolName)
+			suite.True(found)
+			suite.Equal(tc.accrualTime, storedTime)
+		})
+	}
+}
+
+type accrualtime struct {
+	denom string
+	time  time.Time
+}
+
+var nonEmptyAccrualTimes = []accrualtime{
+	{
+		denom: "",
+		time:  time.Time{},
+	},
+	{
+		denom: "btcb",
+		time:  time.Date(1998, 1, 1, 0, 0, 0, 1, time.UTC),
+	},
+}
+
+func (suite *KeeperTestSuite) TestIterateUSDXMintingAccrualTimes() {
+	suite.SetupApp()
+
+	expectedAccrualTimes := nonEmptyAccrualTimes
+
+	for _, at := range expectedAccrualTimes {
+		suite.keeper.SetPreviousUSDXMintingAccrualTime(suite.ctx, at.denom, at.time)
+	}
+
+	var actualAccrualTimes []accrualtime
+	suite.keeper.IterateUSDXMintingAccrualTimes(suite.ctx, func(denom string, accrualTime time.Time) bool {
+		actualAccrualTimes = append(actualAccrualTimes, accrualtime{denom: denom, time: accrualTime})
+		return false
+	})
+
+	suite.Equal(expectedAccrualTimes, actualAccrualTimes)
+}
+
+func (suite *KeeperTestSuite) TestIterateHardSupplyRewardAccrualTimes() {
+	suite.SetupApp()
+
+	expectedAccrualTimes := nonEmptyAccrualTimes
+
+	for _, at := range expectedAccrualTimes {
+		suite.keeper.SetPreviousHardSupplyRewardAccrualTime(suite.ctx, at.denom, at.time)
+	}
+
+	var actualAccrualTimes []accrualtime
+	suite.keeper.IterateHardSupplyRewardAccrualTimes(suite.ctx, func(denom string, accrualTime time.Time) bool {
+		actualAccrualTimes = append(actualAccrualTimes, accrualtime{denom: denom, time: accrualTime})
+		return false
+	})
+
+	suite.Equal(expectedAccrualTimes, actualAccrualTimes)
+}
+
+func (suite *KeeperTestSuite) TestIterateHardBorrowrRewardAccrualTimes() {
+	suite.SetupApp()
+
+	expectedAccrualTimes := nonEmptyAccrualTimes
+
+	for _, at := range expectedAccrualTimes {
+		suite.keeper.SetPreviousHardBorrowRewardAccrualTime(suite.ctx, at.denom, at.time)
+	}
+
+	var actualAccrualTimes []accrualtime
+	suite.keeper.IterateHardBorrowRewardAccrualTimes(suite.ctx, func(denom string, accrualTime time.Time) bool {
+		actualAccrualTimes = append(actualAccrualTimes, accrualtime{denom: denom, time: accrualTime})
+		return false
+	})
+
+	suite.Equal(expectedAccrualTimes, actualAccrualTimes)
+}
+
+func (suite *KeeperTestSuite) TestIterateDelegatorRewardAccrualTimes() {
+	suite.SetupApp()
+
+	expectedAccrualTimes := nonEmptyAccrualTimes
+
+	for _, at := range expectedAccrualTimes {
+		suite.keeper.SetPreviousDelegatorRewardAccrualTime(suite.ctx, at.denom, at.time)
+	}
+
+	var actualAccrualTimes []accrualtime
+	suite.keeper.IterateDelegatorRewardAccrualTimes(suite.ctx, func(denom string, accrualTime time.Time) bool {
+		actualAccrualTimes = append(actualAccrualTimes, accrualtime{denom: denom, time: accrualTime})
+		return false
+	})
+
+	suite.Equal(expectedAccrualTimes, actualAccrualTimes)
+}
+
+func (suite *KeeperTestSuite) TestIterateSwapRewardAccrualTimes() {
+	suite.SetupApp()
+
+	expectedAccrualTimes := nonEmptyAccrualTimes
+
+	for _, at := range expectedAccrualTimes {
+		suite.keeper.SetSwapRewardAccrualTime(suite.ctx, at.denom, at.time)
+	}
+
+	var actualAccrualTimes []accrualtime
+	suite.keeper.IterateSwapRewardAccrualTimes(suite.ctx, func(denom string, accrualTime time.Time) bool {
+		actualAccrualTimes = append(actualAccrualTimes, accrualtime{denom: denom, time: accrualTime})
+		return false
+	})
+
+	suite.Equal(expectedAccrualTimes, actualAccrualTimes)
+}
 
 func TestKeeperTestSuite(t *testing.T) {
 	suite.Run(t, new(KeeperTestSuite))

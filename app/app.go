@@ -43,6 +43,7 @@ import (
 	"github.com/kava-labs/kava/x/issuance"
 	"github.com/kava-labs/kava/x/kavadist"
 	"github.com/kava-labs/kava/x/pricefeed"
+	"github.com/kava-labs/kava/x/swap"
 	validatorvesting "github.com/kava-labs/kava/x/validator-vesting"
 )
 
@@ -68,7 +69,7 @@ var (
 		distr.AppModuleBasic{},
 		gov.NewAppModuleBasic(
 			paramsclient.ProposalHandler, distr.ProposalHandler, committee.ProposalHandler,
-			upgradeclient.ProposalHandler,
+			upgradeclient.ProposalHandler, kavadist.ProposalHandler,
 		),
 		params.AppModuleBasic{},
 		crisis.AppModuleBasic{},
@@ -85,9 +86,12 @@ var (
 		incentive.AppModuleBasic{},
 		issuance.AppModuleBasic{},
 		hard.AppModuleBasic{},
+		swap.AppModuleBasic{},
 	)
 
 	// module account permissions
+	// if these are changed, then the permissions
+	// must also be migrated during a chain upgrade
 	mAccPerms = map[string][]string{
 		auth.FeeCollectorName:       nil,
 		distr.ModuleName:            nil,
@@ -103,6 +107,7 @@ var (
 		kavadist.ModuleName:         {supply.Minter},
 		issuance.ModuleAccountName:  {supply.Minter, supply.Burner},
 		hard.ModuleAccountName:      {supply.Minter},
+		swap.ModuleAccountName:      nil,
 	}
 
 	// module accounts that are allowed to receive tokens
@@ -158,6 +163,7 @@ type App struct {
 	incentiveKeeper incentive.Keeper
 	issuanceKeeper  issuance.Keeper
 	hardKeeper      hard.Keeper
+	swapKeeper      swap.Keeper
 
 	// the module manager
 	mm *module.Manager
@@ -181,7 +187,7 @@ func NewApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts AppOptio
 		gov.StoreKey, params.StoreKey, upgrade.StoreKey, evidence.StoreKey,
 		validatorvesting.StoreKey, auction.StoreKey, cdp.StoreKey, pricefeed.StoreKey,
 		bep3.StoreKey, kavadist.StoreKey, incentive.StoreKey, issuance.StoreKey, committee.StoreKey,
-		hard.StoreKey,
+		hard.StoreKey, swap.StoreKey,
 	)
 	tkeys := sdk.NewTransientStoreKeys(params.TStoreKey)
 
@@ -212,6 +218,7 @@ func NewApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts AppOptio
 	incentiveSubspace := app.paramsKeeper.Subspace(incentive.DefaultParamspace)
 	issuanceSubspace := app.paramsKeeper.Subspace(issuance.DefaultParamspace)
 	hardSubspace := app.paramsKeeper.Subspace(hard.DefaultParamspace)
+	swapSubspace := app.paramsKeeper.Subspace(swap.DefaultParamspace)
 
 	// add keepers
 	app.accountKeeper = auth.NewAccountKeeper(
@@ -299,6 +306,16 @@ func NewApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts AppOptio
 		keys[committee.StoreKey],
 		committeeGovRouter,
 		app.paramsKeeper,
+		app.accountKeeper,
+		app.supplyKeeper,
+	)
+	app.kavadistKeeper = kavadist.NewKeeper(
+		app.cdc,
+		keys[kavadist.StoreKey],
+		kavadistSubspace,
+		app.supplyKeeper,
+		app.distrKeeper,
+		app.ModuleAccountAddrs(),
 	)
 
 	// create gov keeper with router
@@ -308,7 +325,8 @@ func NewApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts AppOptio
 		AddRoute(params.RouterKey, params.NewParamChangeProposalHandler(app.paramsKeeper)).
 		AddRoute(distr.RouterKey, distr.NewCommunityPoolSpendProposalHandler(app.distrKeeper)).
 		AddRoute(upgrade.RouterKey, upgrade.NewSoftwareUpgradeProposalHandler(app.upgradeKeeper)).
-		AddRoute(committee.RouterKey, committee.NewProposalHandler(app.committeeKeeper))
+		AddRoute(committee.RouterKey, committee.NewProposalHandler(app.committeeKeeper)).
+		AddRoute(kavadist.RouterKey, kavadist.NewCommunityPoolMultiSpendProposalHandler(app.kavadistKeeper))
 	app.govKeeper = gov.NewKeeper(
 		app.cdc,
 		keys[gov.StoreKey],
@@ -365,10 +383,18 @@ func NewApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts AppOptio
 		app.pricefeedKeeper,
 		app.auctionKeeper,
 	)
-	app.kavadistKeeper = kavadist.NewKeeper(
+	app.issuanceKeeper = issuance.NewKeeper(
 		app.cdc,
-		keys[kavadist.StoreKey],
-		kavadistSubspace,
+		keys[issuance.StoreKey],
+		issuanceSubspace,
+		app.accountKeeper,
+		app.supplyKeeper,
+	)
+	swapKeeper := swap.NewKeeper(
+		app.cdc,
+		keys[swap.StoreKey],
+		swapSubspace,
+		app.accountKeeper,
 		app.supplyKeeper,
 	)
 	app.incentiveKeeper = incentive.NewKeeper(
@@ -380,23 +406,19 @@ func NewApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts AppOptio
 		&hardKeeper,
 		app.accountKeeper,
 		&stakingKeeper,
-	)
-	app.issuanceKeeper = issuance.NewKeeper(
-		app.cdc,
-		keys[issuance.StoreKey],
-		issuanceSubspace,
-		app.accountKeeper,
-		app.supplyKeeper,
+		&swapKeeper,
 	)
 
 	// register the staking hooks
-	// NOTE: stakingKeeper above is passed by reference, so that it will contain these hooks
+	// NOTE: These keepers are passed by reference above, so they will contain these hooks.
 	app.stakingKeeper = *stakingKeeper.SetHooks(
 		staking.NewMultiStakingHooks(app.distrKeeper.Hooks(), app.slashingKeeper.Hooks(), app.incentiveKeeper.Hooks()))
 
 	app.cdpKeeper = *cdpKeeper.SetHooks(cdp.NewMultiCDPHooks(app.incentiveKeeper.Hooks()))
 
 	app.hardKeeper = *hardKeeper.SetHooks(hard.NewMultiHARDHooks(app.incentiveKeeper.Hooks()))
+
+	app.swapKeeper = *swapKeeper.SetHooks(app.incentiveKeeper.Hooks())
 
 	// create the module manager (Note: Any module instantiated in the module manager that is later modified
 	// must be passed by reference here.)
@@ -423,6 +445,7 @@ func NewApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts AppOptio
 		committee.NewAppModule(app.committeeKeeper, app.accountKeeper),
 		issuance.NewAppModule(app.issuanceKeeper, app.accountKeeper, app.supplyKeeper),
 		hard.NewAppModule(app.hardKeeper, app.supplyKeeper, app.pricefeedKeeper),
+		swap.NewAppModule(app.swapKeeper, app.accountKeeper),
 	)
 
 	// During begin block slashing happens after distr.BeginBlocker so that
@@ -443,7 +466,7 @@ func NewApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts AppOptio
 		validatorvesting.ModuleName, distr.ModuleName,
 		staking.ModuleName, bank.ModuleName, slashing.ModuleName,
 		gov.ModuleName, mint.ModuleName, evidence.ModuleName,
-		pricefeed.ModuleName, cdp.ModuleName, hard.ModuleName, auction.ModuleName,
+		pricefeed.ModuleName, cdp.ModuleName, hard.ModuleName, auction.ModuleName, swap.ModuleName,
 		bep3.ModuleName, kavadist.ModuleName, incentive.ModuleName, committee.ModuleName, issuance.ModuleName,
 		supply.ModuleName,  // calculates the total supply from account - should run after modules that modify accounts in genesis
 		crisis.ModuleName,  // runs the invariants at genesis - should run after other modules
@@ -476,6 +499,7 @@ func NewApp(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts AppOptio
 		committee.NewAppModule(app.committeeKeeper, app.accountKeeper),
 		issuance.NewAppModule(app.issuanceKeeper, app.accountKeeper, app.supplyKeeper),
 		hard.NewAppModule(app.hardKeeper, app.supplyKeeper, app.pricefeedKeeper),
+		swap.NewAppModule(app.swapKeeper, app.accountKeeper),
 	)
 
 	app.sm.RegisterStoreDecoders()

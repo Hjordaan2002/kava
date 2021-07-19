@@ -6,15 +6,18 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/staking"
 
-	abci "github.com/tendermint/tendermint/abci/types"
-	tmtime "github.com/tendermint/tendermint/types/time"
-
 	"github.com/kava-labs/kava/app"
 	"github.com/kava-labs/kava/x/cdp"
 	committeetypes "github.com/kava-labs/kava/x/committee/types"
-	"github.com/kava-labs/kava/x/hard"
+	"github.com/kava-labs/kava/x/incentive/testutil"
 	"github.com/kava-labs/kava/x/pricefeed"
 )
+
+// Avoid cluttering test cases with long function names
+func i(in int64) sdk.Int                    { return sdk.NewInt(in) }
+func d(str string) sdk.Dec                  { return sdk.MustNewDecFromStr(str) }
+func c(denom string, amount int64) sdk.Coin { return sdk.NewInt64Coin(denom, amount) }
+func cs(coins ...sdk.Coin) sdk.Coins        { return sdk.NewCoins(coins...) }
 
 func NewCDPGenStateMulti() app.GenesisState {
 	cdpGenesis := cdp.GenesisState{
@@ -105,7 +108,7 @@ func NewCDPGenStateMulti() app.GenesisState {
 	return app.GenesisState{cdp.ModuleName: cdp.ModuleCdc.MustMarshalJSON(cdpGenesis)}
 }
 
-func NewPricefeedGenStateMulti() app.GenesisState {
+func NewPricefeedGenStateMultiFromTime(t time.Time) app.GenesisState {
 	pfGenesis := pricefeed.GenesisState{
 		Params: pricefeed.Params{
 			Markets: []pricefeed.Market{
@@ -122,82 +125,57 @@ func NewPricefeedGenStateMulti() app.GenesisState {
 				MarketID:      "kava:usd",
 				OracleAddress: sdk.AccAddress{},
 				Price:         sdk.MustNewDecFromStr("2.00"),
-				Expiry:        time.Now().Add(1 * time.Hour),
+				Expiry:        t.Add(1 * time.Hour),
 			},
 			{
 				MarketID:      "btc:usd",
 				OracleAddress: sdk.AccAddress{},
 				Price:         sdk.MustNewDecFromStr("8000.00"),
-				Expiry:        time.Now().Add(1 * time.Hour),
+				Expiry:        t.Add(1 * time.Hour),
 			},
 			{
 				MarketID:      "xrp:usd",
 				OracleAddress: sdk.AccAddress{},
 				Price:         sdk.MustNewDecFromStr("0.25"),
-				Expiry:        time.Now().Add(1 * time.Hour),
+				Expiry:        t.Add(1 * time.Hour),
 			},
 			{
 				MarketID:      "bnb:usd",
 				OracleAddress: sdk.AccAddress{},
 				Price:         sdk.MustNewDecFromStr("17.25"),
-				Expiry:        time.Now().Add(1 * time.Hour),
+				Expiry:        t.Add(1 * time.Hour),
 			},
 			{
 				MarketID:      "busd:usd",
 				OracleAddress: sdk.AccAddress{},
 				Price:         sdk.OneDec(),
-				Expiry:        time.Now().Add(1 * time.Hour),
+				Expiry:        t.Add(1 * time.Hour),
 			},
 			{
 				MarketID:      "zzz:usd",
 				OracleAddress: sdk.AccAddress{},
 				Price:         sdk.MustNewDecFromStr("2.00"),
-				Expiry:        time.Now().Add(1 * time.Hour),
+				Expiry:        t.Add(1 * time.Hour),
 			},
 		},
 	}
 	return app.GenesisState{pricefeed.ModuleName: pricefeed.ModuleCdc.MustMarshalJSON(pfGenesis)}
 }
 
-func NewHardGenStateMulti() app.GenesisState {
-	loanToValue, _ := sdk.NewDecFromStr("0.6")
-	borrowLimit := sdk.NewDec(1000000000000000)
+func NewHardGenStateMulti(genTime time.Time) testutil.HardGenesisBuilder {
+	kavaMM := testutil.NewStandardMoneyMarket("ukava")
+	kavaMM.SpotMarketID = "kava:usd"
+	btcMM := testutil.NewStandardMoneyMarket("btcb")
+	btcMM.SpotMarketID = "btc:usd"
 
-	hardGS := hard.NewGenesisState(hard.NewParams(
-		hard.MoneyMarkets{
-			hard.NewMoneyMarket("usdx", hard.NewBorrowLimit(false, borrowLimit, loanToValue), "usdx:usd", sdk.NewInt(1000000), hard.NewInterestRateModel(sdk.MustNewDecFromStr("0.05"), sdk.MustNewDecFromStr("2"), sdk.MustNewDecFromStr("0.8"), sdk.MustNewDecFromStr("10")), sdk.MustNewDecFromStr("0.05"), sdk.ZeroDec()),
-			hard.NewMoneyMarket("ukava", hard.NewBorrowLimit(false, borrowLimit, loanToValue), "kava:usd", sdk.NewInt(1000000), hard.NewInterestRateModel(sdk.MustNewDecFromStr("0.05"), sdk.MustNewDecFromStr("2"), sdk.MustNewDecFromStr("0.8"), sdk.MustNewDecFromStr("10")), sdk.MustNewDecFromStr("0.05"), sdk.ZeroDec()),
-			hard.NewMoneyMarket("bnb", hard.NewBorrowLimit(false, borrowLimit, loanToValue), "bnb:usd", sdk.NewInt(1000000), hard.NewInterestRateModel(sdk.MustNewDecFromStr("0.05"), sdk.MustNewDecFromStr("2"), sdk.MustNewDecFromStr("0.8"), sdk.MustNewDecFromStr("10")), sdk.MustNewDecFromStr("0.05"), sdk.ZeroDec()),
-			hard.NewMoneyMarket("btcb", hard.NewBorrowLimit(false, borrowLimit, loanToValue), "btc:usd", sdk.NewInt(1000000), hard.NewInterestRateModel(sdk.MustNewDecFromStr("0.05"), sdk.MustNewDecFromStr("2"), sdk.MustNewDecFromStr("0.8"), sdk.MustNewDecFromStr("10")), sdk.MustNewDecFromStr("0.05"), sdk.ZeroDec()),
-			hard.NewMoneyMarket("xrp", hard.NewBorrowLimit(false, borrowLimit, loanToValue), "xrp:usd", sdk.NewInt(1000000), hard.NewInterestRateModel(sdk.MustNewDecFromStr("0.05"), sdk.MustNewDecFromStr("2"), sdk.MustNewDecFromStr("0.8"), sdk.MustNewDecFromStr("10")), sdk.MustNewDecFromStr("0.05"), sdk.ZeroDec()),
-			hard.NewMoneyMarket("zzz", hard.NewBorrowLimit(false, borrowLimit, loanToValue), "zzz:usd", sdk.NewInt(1000000), hard.NewInterestRateModel(sdk.MustNewDecFromStr("0.05"), sdk.MustNewDecFromStr("2"), sdk.MustNewDecFromStr("0.8"), sdk.MustNewDecFromStr("10")), sdk.MustNewDecFromStr("0.05"), sdk.ZeroDec()),
-		},
-		sdk.NewDec(10),
-	), hard.DefaultAccumulationTimes, hard.DefaultDeposits, hard.DefaultBorrows,
-		hard.DefaultTotalSupplied, hard.DefaultTotalBorrowed, hard.DefaultTotalReserves,
-	)
-
-	return app.GenesisState{hard.ModuleName: hard.ModuleCdc.MustMarshalJSON(hardGS)}
-}
-
-func NewAuthGenState(addresses []sdk.AccAddress, coins sdk.Coins) app.GenesisState {
-	coinsList := []sdk.Coins{}
-	for range addresses {
-		coinsList = append(coinsList, coins)
-	}
-
-	// Load up our primary user address
-	if len(addresses) >= 4 {
-		coinsList[3] = sdk.NewCoins(
-			sdk.NewCoin("bnb", sdk.NewInt(1000000000000000)),
-			sdk.NewCoin("ukava", sdk.NewInt(1000000000000000)),
-			sdk.NewCoin("btcb", sdk.NewInt(1000000000000000)),
-			sdk.NewCoin("xrp", sdk.NewInt(1000000000000000)),
-			sdk.NewCoin("zzz", sdk.NewInt(1000000000000000)),
-		)
-	}
-
-	return app.NewAuthGenState(addresses, coinsList)
+	builder := testutil.NewHardGenesisBuilder().WithGenesisTime(genTime).
+		WithInitializedMoneyMarket(testutil.NewStandardMoneyMarket("usdx")).
+		WithInitializedMoneyMarket(kavaMM).
+		WithInitializedMoneyMarket(testutil.NewStandardMoneyMarket("bnb")).
+		WithInitializedMoneyMarket(btcMM).
+		WithInitializedMoneyMarket(testutil.NewStandardMoneyMarket("xrp")).
+		WithInitializedMoneyMarket(testutil.NewStandardMoneyMarket("zzz"))
+	return builder
 }
 
 func NewStakingGenesisState() app.GenesisState {
@@ -208,34 +186,23 @@ func NewStakingGenesisState() app.GenesisState {
 	}
 }
 
-func (suite *KeeperTestSuite) SetupWithGenState() {
-	tApp := app.NewTestApp()
-	ctx := tApp.NewContext(true, abci.Header{Height: 1, Time: tmtime.Now()})
-
-	tApp.InitializeFromGenesisStates(
-		NewAuthGenState(suite.getAllAddrs(), cs(c("ukava", 1_000_000_000))),
-		NewStakingGenesisState(),
-		NewPricefeedGenStateMulti(),
-		NewCDPGenStateMulti(),
-		NewHardGenStateMulti(),
-	)
-
-	// Set up a god committee
-	committeeModKeeper := tApp.GetCommitteeKeeper()
-	godCommittee := committeetypes.Committee{
-		ID:               1,
-		Description:      "This committee is for testing.",
-		Members:          suite.addrs[:2],
-		Permissions:      []committeetypes.Permission{committeetypes.GodPermission{}},
-		VoteThreshold:    d("0.667"),
-		ProposalDuration: time.Hour * 24 * 7,
+func NewCommitteeGenesisState(members []sdk.AccAddress) app.GenesisState {
+	genState := committeetypes.DefaultGenesisState()
+	genState.Committees = committeetypes.Committees{
+		committeetypes.MemberCommittee{
+			BaseCommittee: committeetypes.BaseCommittee{
+				ID:               genState.NextProposalID,
+				Description:      "This committee is for testing.",
+				Members:          members,
+				Permissions:      []committeetypes.Permission{committeetypes.GodPermission{}},
+				VoteThreshold:    d("0.667"),
+				ProposalDuration: time.Hour * 24 * 7,
+				TallyOption:      committeetypes.FirstPastThePost,
+			},
+		},
 	}
-	committeeModKeeper.SetCommittee(ctx, godCommittee)
-
-	suite.app = tApp
-	suite.ctx = ctx
-	suite.keeper = tApp.GetIncentiveKeeper()
-	suite.hardKeeper = tApp.GetHardKeeper()
-	suite.stakingKeeper = tApp.GetStakingKeeper()
-	suite.committeeKeeper = committeeModKeeper
+	genState.NextProposalID += 1
+	return app.GenesisState{
+		committeetypes.ModuleName: committeetypes.ModuleCdc.MustMarshalJSON(genState),
+	}
 }

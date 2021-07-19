@@ -58,32 +58,18 @@ func queryRewardsHandlerFn(cliCtx context.CLIContext) http.HandlerFunc {
 			}
 		}
 
-		if unsynced {
-			switch strings.ToLower(rewardType) {
-			case "hard":
-				params := types.NewQueryHardRewardsUnsyncedParams(page, limit, owner)
-				executeHardRewardsUnsyncedQuery(w, cliCtx, params)
-			case "usdx_minting":
-				params := types.NewQueryUSDXMintingRewardsUnsyncedParams(page, limit, owner)
-				executeUSDXMintingRewardsUnsyncedQuery(w, cliCtx, params)
-			default:
-				hardParams := types.NewQueryHardRewardsUnsyncedParams(page, limit, owner)
-				usdxMintingParams := types.NewQueryUSDXMintingRewardsUnsyncedParams(page, limit, owner)
-				executeBothUnsyncedRewardQueries(w, cliCtx, hardParams, usdxMintingParams)
-			}
-		} else {
-			switch strings.ToLower(rewardType) {
-			case "hard":
-				params := types.NewQueryHardRewardsParams(page, limit, owner)
-				executeHardRewardsQuery(w, cliCtx, params)
-			case "usdx_minting":
-				params := types.NewQueryUSDXMintingRewardsParams(page, limit, owner)
-				executeUSDXMintingRewardsQuery(w, cliCtx, params)
-			default:
-				hardParams := types.NewQueryHardRewardsParams(page, limit, owner)
-				usdxMintingParams := types.NewQueryUSDXMintingRewardsParams(page, limit, owner)
-				executeBothRewardQueries(w, cliCtx, hardParams, usdxMintingParams)
-			}
+		params := types.NewQueryRewardsParams(page, limit, owner, unsynced)
+		switch strings.ToLower(rewardType) {
+		case "hard":
+			executeHardRewardsQuery(w, cliCtx, params)
+		case "usdx_minting":
+			executeUSDXMintingRewardsQuery(w, cliCtx, params)
+		case "delegator":
+			executeDelegatorRewardsQuery(w, cliCtx, params)
+		case "swap":
+			executeSwapRewardsQuery(w, cliCtx, params)
+		default:
+			executeAllRewardQueries(w, cliCtx, params)
 		}
 	}
 }
@@ -110,43 +96,25 @@ func queryParamsHandlerFn(cliCtx context.CLIContext) http.HandlerFunc {
 
 func queryRewardFactorsHandlerFn(cliCtx context.CLIContext) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, _, _, err := rest.ParseHTTPArgsWithLimit(r, 0)
-		if err != nil {
-			rest.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		// Parse the query height
 		cliCtx, ok := rest.ParseQueryHeightOrReturnBadRequest(w, cliCtx, r)
 		if !ok {
 			return
 		}
 
-		var denom string
-
-		if x := r.URL.Query().Get(RestDenom); len(x) != 0 {
-			denom = strings.TrimSpace(x)
-		}
-
-		params := types.NewQueryRewardFactorsParams(denom)
-
-		bz, err := cliCtx.Codec.MarshalJSON(params)
-		if err != nil {
-			rest.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
-			return
-		}
-
 		route := fmt.Sprintf("custom/%s/%s", types.ModuleName, types.QueryGetRewardFactors)
-		res, height, err := cliCtx.QueryWithData(route, bz)
-		cliCtx = cliCtx.WithHeight(height)
+
+		res, height, err := cliCtx.QueryWithData(route, nil)
 		if err != nil {
 			rest.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+
+		cliCtx = cliCtx.WithHeight(height)
 		rest.PostProcessResponse(w, cliCtx, res)
 	}
 }
 
-func executeHardRewardsQuery(w http.ResponseWriter, cliCtx context.CLIContext, params types.QueryHardRewardsParams) {
+func executeHardRewardsQuery(w http.ResponseWriter, cliCtx context.CLIContext, params types.QueryRewardsParams) {
 	bz, err := cliCtx.Codec.MarshalJSON(params)
 	if err != nil {
 		rest.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to marshal query params: %s", err))
@@ -163,24 +131,7 @@ func executeHardRewardsQuery(w http.ResponseWriter, cliCtx context.CLIContext, p
 	rest.PostProcessResponse(w, cliCtx, res)
 }
 
-func executeHardRewardsUnsyncedQuery(w http.ResponseWriter, cliCtx context.CLIContext, params types.QueryHardRewardsUnsyncedParams) {
-	bz, err := cliCtx.Codec.MarshalJSON(params)
-	if err != nil {
-		rest.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to marshal query params: %s", err))
-		return
-	}
-
-	res, height, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetHardRewardsUnsynced), bz)
-	if err != nil {
-		rest.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	cliCtx = cliCtx.WithHeight(height)
-	rest.PostProcessResponse(w, cliCtx, res)
-}
-
-func executeUSDXMintingRewardsQuery(w http.ResponseWriter, cliCtx context.CLIContext, params types.QueryUSDXMintingRewardsParams) {
+func executeUSDXMintingRewardsQuery(w http.ResponseWriter, cliCtx context.CLIContext, params types.QueryRewardsParams) {
 	bz, err := cliCtx.Codec.MarshalJSON(params)
 	if err != nil {
 		rest.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to marshal query params: %s", err))
@@ -197,14 +148,14 @@ func executeUSDXMintingRewardsQuery(w http.ResponseWriter, cliCtx context.CLICon
 	rest.PostProcessResponse(w, cliCtx, res)
 }
 
-func executeUSDXMintingRewardsUnsyncedQuery(w http.ResponseWriter, cliCtx context.CLIContext, params types.QueryUSDXMintingRewardsUnsyncedParams) {
+func executeDelegatorRewardsQuery(w http.ResponseWriter, cliCtx context.CLIContext, params types.QueryRewardsParams) {
 	bz, err := cliCtx.Codec.MarshalJSON(params)
 	if err != nil {
 		rest.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to marshal query params: %s", err))
 		return
 	}
 
-	res, height, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetUSDXMintingRewardsUnsynced), bz)
+	res, height, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetDelegatorRewards), bz)
 	if err != nil {
 		rest.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
 		return
@@ -214,66 +165,31 @@ func executeUSDXMintingRewardsUnsyncedQuery(w http.ResponseWriter, cliCtx contex
 	rest.PostProcessResponse(w, cliCtx, res)
 }
 
-func executeBothRewardQueries(w http.ResponseWriter, cliCtx context.CLIContext,
-	hardParams types.QueryHardRewardsParams, usdxMintingParams types.QueryUSDXMintingRewardsParams) {
-	hardBz, err := cliCtx.Codec.MarshalJSON(hardParams)
+func executeSwapRewardsQuery(w http.ResponseWriter, cliCtx context.CLIContext, params types.QueryRewardsParams) {
+	bz, err := cliCtx.Codec.MarshalJSON(params)
 	if err != nil {
 		rest.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to marshal query params: %s", err))
 		return
 	}
 
-	hardRes, height, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetHardRewards), hardBz)
+	res, height, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetSwapRewards), bz)
 	if err != nil {
 		rest.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	var hardClaims types.HardLiquidityProviderClaims
-	cliCtx.Codec.MustUnmarshalJSON(hardRes, &hardClaims)
-
-	usdxMintingBz, err := cliCtx.Codec.MarshalJSON(usdxMintingParams)
-	if err != nil {
-		rest.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to marshal query params: %s", err))
-		return
-	}
-
-	usdxMintingRes, height, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetUSDXMintingRewards), usdxMintingBz)
-	if err != nil {
-		rest.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	var usdxMintingClaims types.USDXMintingClaims
-	cliCtx.Codec.MustUnmarshalJSON(usdxMintingRes, &usdxMintingClaims)
 
 	cliCtx = cliCtx.WithHeight(height)
-
-	type rewardResult struct {
-		HardClaims        types.HardLiquidityProviderClaims `json:"hard_claims" yaml:"hard_claims"`
-		UsdxMintingClaims types.USDXMintingClaims           `json:"usdx_minting_claims" yaml:"usdx_minting_claims"`
-	}
-
-	res := rewardResult{
-		HardClaims:        hardClaims,
-		UsdxMintingClaims: usdxMintingClaims,
-	}
-
-	resBz, err := cliCtx.Codec.MarshalJSON(res)
-	if err != nil {
-		rest.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to marshal result: %s", err))
-		return
-	}
-
-	rest.PostProcessResponse(w, cliCtx, resBz)
+	rest.PostProcessResponse(w, cliCtx, res)
 }
 
-func executeBothUnsyncedRewardQueries(w http.ResponseWriter, cliCtx context.CLIContext,
-	hardParams types.QueryHardRewardsUnsyncedParams, usdxMintingParams types.QueryUSDXMintingRewardsUnsyncedParams) {
-	hardBz, err := cliCtx.Codec.MarshalJSON(hardParams)
+func executeAllRewardQueries(w http.ResponseWriter, cliCtx context.CLIContext, params types.QueryRewardsParams) {
+
+	paramsBz, err := cliCtx.Codec.MarshalJSON(params)
 	if err != nil {
 		rest.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to marshal query params: %s", err))
 		return
 	}
-
-	hardRes, height, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetHardRewardsUnsynced), hardBz)
+	hardRes, _, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetHardRewards), paramsBz)
 	if err != nil {
 		rest.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
 		return
@@ -281,13 +197,7 @@ func executeBothUnsyncedRewardQueries(w http.ResponseWriter, cliCtx context.CLIC
 	var hardClaims types.HardLiquidityProviderClaims
 	cliCtx.Codec.MustUnmarshalJSON(hardRes, &hardClaims)
 
-	usdxMintingBz, err := cliCtx.Codec.MarshalJSON(usdxMintingParams)
-	if err != nil {
-		rest.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("failed to marshal query params: %s", err))
-		return
-	}
-
-	usdxMintingRes, height, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetUSDXMintingRewardsUnsynced), usdxMintingBz)
+	usdxMintingRes, _, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetUSDXMintingRewards), paramsBz)
 	if err != nil {
 		rest.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
 		return
@@ -295,16 +205,36 @@ func executeBothUnsyncedRewardQueries(w http.ResponseWriter, cliCtx context.CLIC
 	var usdxMintingClaims types.USDXMintingClaims
 	cliCtx.Codec.MustUnmarshalJSON(usdxMintingRes, &usdxMintingClaims)
 
+	delegatorRes, _, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetDelegatorRewards), paramsBz)
+	if err != nil {
+		rest.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var delegatorClaims types.DelegatorClaims
+	cliCtx.Codec.MustUnmarshalJSON(delegatorRes, &delegatorClaims)
+
+	swapRes, height, err := cliCtx.QueryWithData(fmt.Sprintf("custom/incentive/%s", types.QueryGetSwapRewards), paramsBz)
+	if err != nil {
+		rest.WriteErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var swapClaims types.SwapClaims
+	cliCtx.Codec.MustUnmarshalJSON(swapRes, &swapClaims)
+
 	cliCtx = cliCtx.WithHeight(height)
 
 	type rewardResult struct {
 		HardClaims        types.HardLiquidityProviderClaims `json:"hard_claims" yaml:"hard_claims"`
 		UsdxMintingClaims types.USDXMintingClaims           `json:"usdx_minting_claims" yaml:"usdx_minting_claims"`
+		DelegatorClaims   types.DelegatorClaims             `json:"delegator_claims" yaml:"delegator_claims"`
+		SwapClaims        types.SwapClaims                  `json:"swap_claims" yaml:"swap_claims"`
 	}
 
 	res := rewardResult{
 		HardClaims:        hardClaims,
 		UsdxMintingClaims: usdxMintingClaims,
+		DelegatorClaims:   delegatorClaims,
+		SwapClaims:        swapClaims,
 	}
 
 	resBz, err := cliCtx.Codec.MarshalJSON(res)
