@@ -31,12 +31,12 @@ import (
 // It's this percent change we calculate and compare to the slippage limit provided.
 //
 // For example, if we have a pool with 100e6 ukava and 400e6 usdx.  The ukava price is 4 usdx and the
-// usdx price is 0.25 ukava.  If a depositor adds liquidity of 4e6 ukava and 14e6 usdx, a kava price of
-// 3.50 usdx and a usdx price of 0.29 ukava.  This is a -12.5% slippage is the ukava price, and a 14.3%
+// usdx price is 0.25 ukava.  If a depositor adds liquidity of 4e6 ukava and 14e6 usdx (a kava price of
+// 3.50 usdx and a usdx price of 0.29 ukava) there will be a -12.5% slippage in the ukava price, and a 14.3%
 // slippage in the usdx price.
 //
 // These slippages can be calculated by S_B = ((A/B')/(A/B) - 1) and S_A ((B/A')/(B/A) - 1), simplifying to
-// S_B = (A/A' - 1), and S_B = (B/B' - 1).  An error is returned when max(S_A, S_B) > slippageLimit.
+// S_A = (A/A' - 1), and S_B = (B/B' - 1).  An error is returned when max(S_A, S_B) > slippageLimit.
 func (k Keeper) Deposit(ctx sdk.Context, depositor sdk.AccAddress, coinA sdk.Coin, coinB sdk.Coin, slippageLimit sdk.Dec) error {
 	desiredAmount := sdk.NewCoins(coinA, coinB)
 

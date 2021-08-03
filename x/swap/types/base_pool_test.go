@@ -163,9 +163,9 @@ func TestBasePool_ShareValue_PoolCreator(t *testing.T) {
 			assert.NoError(t, err)
 
 			a, b := pool.ShareValue(pool.TotalShares())
-			// pool creators experience zero truncation error and always
-			// and always receive their original balance on a 100% withdraw
-			// when there are no other deposits that result in a fractional share ownership
+			// pool creators experience zero truncation error and always receive their
+			// original balance on a 100% withdraw when there are no other deposits that
+			// result in a fractional share ownership
 			assert.Equal(t, tc.reservesA, a, "share value of reserves A not equal")
 			assert.Equal(t, tc.reservesB, b, "share value of reserves B not equal")
 		})

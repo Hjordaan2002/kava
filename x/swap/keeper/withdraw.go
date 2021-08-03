@@ -16,8 +16,8 @@ import (
 // are removed then the pool is deleted.
 //
 // The number of shares must be large enough to result in at least 1 unit of the smallest reserve in the pool.
-// If the share input is below the minimum required for positive liquidity to be remove from both reserves, a
-// insufficient error is returned.
+// If the share input is below the minimum required for positive liquidity to be removed from both reserves, an
+// insufficient liquidity error is returned.
 //
 // In addition, if the withdrawn liquidity for each reserve is below the provided minimum, a slippage exceeded
 // error is returned.
